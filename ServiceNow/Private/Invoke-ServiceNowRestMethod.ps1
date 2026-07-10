@@ -155,91 +155,84 @@ function Invoke-ServiceNowRestMethod {
     try {
         $response = Invoke-WebRequest @params
         Write-Debug $response
-    } catch {
-        $ProgressPreference = $oldProgressPreference
-        throw $_
-    }
 
-    # validate response
-    switch ($Method) {
-        'Delete' {
-            if ( $response.StatusCode -ne 204 ) {
-                throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
-            }
-        }
-        Default {
-            # TODO: this could use some work
-            # checking for content is good, but at times we'll get content that's not valid
-            # eg. html content when a dev instance is hibernating
-            if ( $response.Content ) {
-                $content = $response.content | ConvertFrom-Json
-                if ( $content.PSobject.Properties.Name -contains "result" ) {
-                    $records = @($content | Select-Object -ExpandProperty result)
-                } else {
-                    $records = @($content)
+        # validate response
+        switch ($Method) {
+            'Delete' {
+                if ( $response.StatusCode -ne 204 ) {
+                    throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
                 }
-            } else {
-                # invoke-webrequest didn't throw an error per se, but we didn't get content back either
-                throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
+            }
+            Default {
+                # TODO: this could use some work
+                # checking for content is good, but at times we'll get content that's not valid
+                # eg. html content when a dev instance is hibernating
+                if ( $response.Content ) {
+                    $content = $response.content | ConvertFrom-Json
+                    if ( $content.PSobject.Properties.Name -contains "result" ) {
+                        $records = @($content | Select-Object -ExpandProperty result)
+                    } else {
+                        $records = @($content)
+                    }
+                } else {
+                    # invoke-webrequest didn't throw an error per se, but we didn't get content back either
+                    throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
+                }
             }
         }
-    }
 
-    $totalRecordCount = 0
-    if ( $response.Headers.'X-Total-Count' ) {
-        if ($PSVersionTable.PSVersion.Major -lt 6) {
-            $totalRecordCount = [int]$response.Headers.'X-Total-Count'
-        } else {
-            $totalRecordCount = [int]($response.Headers.'X-Total-Count'[0])
-        }
-        Write-Verbose "Total number of records for this query: $totalRecordCount"
-    }
-
-    # if option to get all records was provided, loop and get them all
-    if ( $PSCmdlet.PagingParameters.IncludeTotalCount ) {
-
-        $retrieveRecordCount = $totalRecordCount - $PSCmdlet.PagingParameters.Skip
-        if ( $retrieveRecordCount -ne 0 ) {
-            Write-Warning "Getting $retrieveRecordCount records..."
+        $totalRecordCount = 0
+        if ( $response.Headers.'X-Total-Count' ) {
+            if ($PSVersionTable.PSVersion.Major -lt 6) {
+                $totalRecordCount = [int]$response.Headers.'X-Total-Count'
+            } else {
+                $totalRecordCount = [int]($response.Headers.'X-Total-Count'[0])
+            }
+            Write-Verbose "Total number of records for this query: $totalRecordCount"
         }
 
-        $setPoint = $params.body.sysparm_offset + $params.body.sysparm_limit
+        # if option to get all records was provided, loop and get them all
+        if ( $PSCmdlet.PagingParameters.IncludeTotalCount ) {
 
-        while ($totalRecordCount -gt $setPoint) {
+            $retrieveRecordCount = $totalRecordCount - $PSCmdlet.PagingParameters.Skip
+            if ( $retrieveRecordCount -ne 0 ) {
+                Write-Warning "Getting $retrieveRecordCount records..."
+            }
 
-            # up the offset so we get the next set of records
-            $params.body.sysparm_offset += $params.body.sysparm_limit
             $setPoint = $params.body.sysparm_offset + $params.body.sysparm_limit
 
-            $end = if ( $totalRecordCount -lt $setPoint ) {
-                $totalRecordCount
-            } else {
-                $setPoint
-            }
+            while ($totalRecordCount -gt $setPoint) {
 
-            Write-Verbose ('getting {0}-{1} of {2}' -f ($params.body.sysparm_offset + 1), $end, $totalRecordCount)
-            try {
+                # up the offset so we get the next set of records
+                $params.body.sysparm_offset += $params.body.sysparm_limit
+                $setPoint = $params.body.sysparm_offset + $params.body.sysparm_limit
+
+                $end = if ( $totalRecordCount -lt $setPoint ) {
+                    $totalRecordCount
+                } else {
+                    $setPoint
+                }
+
+                Write-Verbose ('getting {0}-{1} of {2}' -f ($params.body.sysparm_offset + 1), $end, $totalRecordCount)
                 $response = Invoke-WebRequest @params -Verbose:$false
-            } catch {
-                $ProgressPreference = $oldProgressPreference
-                throw $_
+
+                $content = $response.content | ConvertFrom-Json
+                if ( $content.PSobject.Properties.Name -contains "result" ) {
+                    $records += $content | Select-Object -ExpandProperty result
+                } else {
+                    $records += $content
+                }
             }
 
-            $content = $response.content | ConvertFrom-Json
-            if ( $content.PSobject.Properties.Name -contains "result" ) {
-                $records += $content | Select-Object -ExpandProperty result
-            } else {
-                $records += $content
+            if ( $totalRecordCount -ne ($records.count + $PSCmdlet.PagingParameters.Skip) ) {
+                Write-Error ('The expected number of records was not received.  This can occur if your -First value, how many records retrieved at once, is too large.  Lower this value and try again.  Received: {0}, expected: {1}' -f $records.count, ($totalRecordCount - $PSCmdlet.PagingParameters.Skip))
             }
-        }
-
-        if ( $totalRecordCount -ne ($records.count + $PSCmdlet.PagingParameters.Skip) ) {
-            Write-Error ('The expected number of records was not received.  This can occur if your -First value, how many records retrieved at once, is too large.  Lower this value and try again.  Received: {0}, expected: {1}' -f $records.count, ($totalRecordCount - $PSCmdlet.PagingParameters.Skip))
         }
     }
-
-    # set the progress pref back now that done with invoke-webrequest
-    $ProgressPreference = $oldProgressPreference
+    finally {
+        # set the progress pref back now that done with invoke-webrequest
+        $ProgressPreference = $oldProgressPreference
+    }
 
     switch ($Method) {
         'Get' {

@@ -190,10 +190,12 @@ function New-ServiceNowSession {
             $oldProgressPreference = $ProgressPreference
             $ProgressPreference = 'SilentlyContinue'
 
-            $response = Invoke-WebRequest @params
-
-            # set the progress pref back now that done with invoke-webrequest
-            $ProgressPreference = $oldProgressPreference
+            try {
+                $response = Invoke-WebRequest @params
+            } finally {
+                # set the progress pref back now that done with invoke-webrequest
+                $ProgressPreference = $oldProgressPreference
+            }
 
             if ( $response.Content ) {
                 $token = $response.Content | ConvertFrom-Json
