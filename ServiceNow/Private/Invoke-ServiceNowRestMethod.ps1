@@ -164,7 +164,7 @@ function Invoke-ServiceNowRestMethod {
     switch ($Method) {
         'Delete' {
             if ( $response.StatusCode -ne 204 ) {
-                throw ('"{0} : {1}' -f $response.StatusCode, $response | Out-String )
+                throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
             }
         }
         Default {
@@ -180,7 +180,7 @@ function Invoke-ServiceNowRestMethod {
                 }
             } else {
                 # invoke-webrequest didn't throw an error per se, but we didn't get content back either
-                throw ('"{0} : {1}' -f $response.StatusCode, $response | Out-String )
+                throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
             }
         }
     }

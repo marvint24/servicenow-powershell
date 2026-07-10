@@ -209,7 +209,7 @@ function New-ServiceNowSession {
 
             } else {
                 # invoke-webrequest didn't throw an error, but we didn't get a token back either
-                throw ('"{0} : {1}' -f $response.StatusCode, $response | Out-String )
+                throw ('{0} : {1}' -f $response.StatusCode, ($response | Out-String))
             }
         }
 
