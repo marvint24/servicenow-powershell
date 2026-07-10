@@ -160,7 +160,7 @@ function New-ServiceNowSession {
     }
 
     $script:PSDefaultParameterValues['Invoke-WebRequest:TimeoutSec'] = $TimeoutSec
-    $script:PSDefaultParameterValues['Invoke-RestMethodt:TimeoutSec'] = $TimeoutSec
+    $script:PSDefaultParameterValues['Invoke-RestMethod:TimeoutSec'] = $TimeoutSec
 
     switch -Wildcard ($PSCmdLet.ParameterSetName) {
         'OAuth*' {
